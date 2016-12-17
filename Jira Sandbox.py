@@ -1,8 +1,8 @@
 from jira import JIRA
 from collections import Counter
 
-link = 'https://stgjira.ezesoft.net/'
-username = 'cfall'
+link = ''
+username = ''
 pw = ''
 
 def connect_jira(jira_server, jira_user, jira_password):
