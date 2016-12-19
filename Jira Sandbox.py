@@ -24,4 +24,3 @@ jira = connect_jira(link, username, pw)
 issues_in_proj = jira.search_issues('project=OPI')
 for issue in issues_in_proj:
     print issue
-
