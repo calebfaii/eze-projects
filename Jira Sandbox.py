@@ -1,9 +1,9 @@
 from jira import JIRA
-from collections import Counter
+import secrets
 
-link = ''
-username = ''
-pw = ''
+link = secrets.website
+username = secrets.username
+pw = secrets.password
 
 def connect_jira(jira_server, jira_user, jira_password):
     '''
@@ -22,6 +22,6 @@ def connect_jira(jira_server, jira_user, jira_password):
 
 jira = connect_jira(link, username, pw)
 issues_in_proj = jira.search_issues('project=OPI')
-print issues_in_proj
-
+for issue in issues_in_proj:
+    print issue
 
