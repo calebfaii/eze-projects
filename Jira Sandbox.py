@@ -64,10 +64,3 @@ for epic in jira_epics:
     if type(epic) != None:
         ep = jira.issue(str(epic))
         print ep
-
-
-
-
-
-
-
