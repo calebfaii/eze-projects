@@ -52,15 +52,37 @@ def getLaceEpics():
         print "Failed to retrieve Epics: %s" % e
         return None
 
-jira_epics = []
+def getJiraEpics():
+    """"
+    Connect to JIRA.  Return unique list of Epic Names in  and Jira Key.  Return None on error.
+    """
+    jira_epics = []
+    jira_epic_names = []
+    jira = connectJira(link, username, pw)
+    issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0' AND type != Epic", maxResults=500)
+    for issue in issues_in_version:
+        epiclink = issue.fields.customfield_10860
+        if epiclink not in jira_epics and type(epiclink) != None:
+            jira_epics.append(epiclink)
+    for epic in jira_epics:
+        try:
+            e = jira.issue(epic)
+            ep = e.fields.summary
+            epic_key = (ep, epic)
+            jira_epic_names.append(epic_key)
+        except:
+            continue
+    return jira_epic_names
+
 lace_epics = getLaceEpics()
-jira = connectJira(link, username, pw)
-issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0' AND type != Epic", maxResults=500)
-for issue in issues_in_version:
-    epiclink = issue.fields.customfield_10860
-    if epiclink not in jira_epics:
-        jira_epics.append(epiclink)
-for epic in jira_epics:
-    if type(epic) != None:
-        ep = jira.issue(str(epic))
-        print ep
+jepics = getJiraEpics()
+
+lace_keys = []
+for item in lace_epics:
+    lkey = item[2]
+    lace_keys.append(lkey)
+
+for jepic in jepics:
+    ekey = jepic[1]
+    if ekey not in lace_keys:
+        print "UNLINKED: Team = ", str(jepic[0]), "Key = ", str(jepic[1])
