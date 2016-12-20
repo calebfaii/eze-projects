@@ -52,9 +52,22 @@ def getLaceEpics():
         print "Failed to retrieve Epics: %s" % e
         return None
 
+jira_epics = []
 lace_epics = getLaceEpics()
 jira = connectJira(link, username, pw)
-issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0'", fields='Epic Link', maxResults=500)
-# parsed_issues = json.loads(issues_in_version.read())
-# for issue in parsed_issues:
-    # print issue
+issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0' AND type != Epic", maxResults=500)
+for issue in issues_in_version:
+    epiclink = issue.fields.customfield_10860
+    if epiclink not in jira_epics:
+        jira_epics.append(epiclink)
+for epic in jira_epics:
+    if type(epic) != None:
+        ep = jira.issue(str(epic))
+        print ep
+
+
+
+
+
+
+
