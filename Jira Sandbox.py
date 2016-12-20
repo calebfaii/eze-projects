@@ -54,7 +54,11 @@ def getLaceEpics():
 
 lace_epics = getLaceEpics()
 jira = connectJira(link, username, pw)
-issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0'", fields='Epic Link', maxResults=500)
-# parsed_issues = json.loads(issues_in_version.read())
-# for issue in parsed_issues:
-    # print issue
+# issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0'",
+                                       # fields='customfield_10862',
+                                       # maxResults=500, json_result=True,
+                                       # expand='renderedFields')
+issues_in_version = jira.search_issues("fixVersion='5.7 SR10.12.0'", json_result=True)
+one = issues_in_version['issues']
+
+
