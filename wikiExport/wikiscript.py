@@ -32,8 +32,10 @@ SHAREPOINT_HOSTNAME = "http://sp2013web01:1818"
 SP_HOST_HOMEPAGE = "/sites/wikis/fixwiki/Pages/Welcome_to_the_FIX_Wiki.aspx/_api/"
 SP_HOME_URL = SHAREPOINT_HOSTNAME + SP_HOST_HOMEPAGE
 
+VALID_SEARCH_PATH = '/sites/wikis/fixwiki/Pages/'
 
-def connection_success(response_code):
+
+def connection_successful(response_code):
 
     """
     Custom exception helper function for handling HTTP Response Code errors.
@@ -70,33 +72,9 @@ def sharepoint_session(sharepoint_user=SHAREPOINT_USERNAME,
                                 auth=HttpNtlmAuth(sharepoint_user,
                                                   sharepoint_pw))
     HTTP_response_code = authenticate.status_code
-    if connection_success(HTTP_response_code):
+    if connection_successful(HTTP_response_code):
         print "SharePoint connection successful."
         return session
-
-
-def crawl_home_page(active_session, host_link=SHAREPOINT_HOSTNAME, link_path=SP_HOST_HOMEPAGE):
-
-    """
-    This function returns a dictionary of {descendant pages: page link} which
-    are present in the left menu bar of the Wiki's home page.
-
-    An authenticated session and a link to the home page are passed as parameters.
-    Default values can be modified at the top of this module.
-    """
-
-    home_page_url = host_link + link_path
-    left_menu_bar = active_session.post(home_page_url)
-    left_menu_pages = lxml.html.fromstring(left_menu_bar.content)
-
-    root_menu = left_menu_pages.xpath('//*[@id="zz8_RootAspMenu"]/*/*/*/span[@class="menu-item-text"]/text()')
-    root_links = left_menu_pages.xpath('//*[@id="zz8_RootAspMenu"]/*/a/@href')
-
-    for item in root_menu:
-        if item.startswith('--'):
-            root_menu.remove(item)
-
-    return {root_menu[index]: root_links[index] for index in xrange(0, 32)}
 
 
 def get_page_HTML(active_session, page_link):
@@ -120,7 +98,7 @@ def get_page_HTML(active_session, page_link):
     content_end = '<div class="right-wp-zone-col">'
 
     page_object = active_session.post(page_link)
-    if connection_success(page_object.status_code):
+    if connection_successful(page_object.status_code):
         page_html = page_object.content[(page_object.text.find(content_start)
                                          + len(content_start)):page_object.text.find(content_end)]
         return page_html
@@ -139,7 +117,7 @@ def get_page_resources(page_html):
     return [link.get('href')for link in soup.findAll('a')]
 
 
-def return_web_links(page_soup):
+def return_web_links(page_soup, valid_link_path=VALID_SEARCH_PATH):
 
     """
     Returns a list of valid web links found on a page.
@@ -149,7 +127,7 @@ def return_web_links(page_soup):
 
     try:
         for line in page_soup:
-            if line.startswith('/sites/wikis/fixwiki/Pages/'):
+            if line.startswith(valid_link_path):
                 if line.endswith('.aspx'):
                     web_links.append(line)
         return web_links
@@ -183,8 +161,12 @@ for i in pages_to_go:
             if i not in pages_to_go:
                 pages_to_go.append(i)
     counter += 1
+print "###################################"
 print "Total pages crawled: ", counter
 print "Total valid web pages found: ", len(pages_to_go)
+print "Valid links: "
+for i in pages_to_go:
+    print i
 
 ######################################################################
 
