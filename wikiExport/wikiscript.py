@@ -3,12 +3,22 @@ This module implements a series of tools to connect to SharePoint .ASPX
 pages, parse content, and prepare this content for migration to Confluence.
 
 Users must be on the Eze network to access SharePoint or Confluence.
+
+The sole objective of this module is to extract, transform, and store the following
+page attributes:
+
+    - Page title
+    - Page content
+    - Page images
+    - Page attachments
+
+Ultimately, a collection of "page" objects will be returned to the user for disposition
+as desired.
 """
 
 from bs4 import BeautifulSoup
 import requests
 import lxml
-import time
 from requests_ntlm import HttpNtlmAuth
 from httplib import responses
 import wikisecrets
@@ -16,11 +26,11 @@ import re
 # TODO: REPLACE THIS WITH GETPASS WHEN READY
 
 # GLOBAL PARAMETERS:
-sharepoint_username = wikisecrets.wiki_user
-sharepoint_password = wikisecrets.wiki_pw
-instance = "http://sp2013web01:1818"
-homepage = "/sites/wikis/fixwiki/Pages/Welcome_to_the_FIX_Wiki.aspx/_api/"
-this_domain = instance + homepage
+SHAREPOINT_USERNAME = wikisecrets.wiki_user
+SHAREPOINT_PASSWORD = wikisecrets.wiki_pw
+SHAREPOINT_HOSTNAME = "http://sp2013web01:1818"
+SP_HOST_HOMEPAGE = "/sites/wikis/fixwiki/Pages/Welcome_to_the_FIX_Wiki.aspx/_api/"
+SP_HOME_URL = SHAREPOINT_HOSTNAME + SP_HOST_HOMEPAGE
 
 
 def connection_success(response_code):
@@ -38,9 +48,9 @@ def connection_success(response_code):
         raise Warning('Connection failed. Response code %d: "%s"' % (response_code, responses[response_code]))
 
 
-def sharepoint_session(sharepoint_user=sharepoint_username,
-                       sharepoint_pw=sharepoint_password,
-                       domain=this_domain):
+def sharepoint_session(sharepoint_user=SHAREPOINT_USERNAME,
+                       sharepoint_pw=SHAREPOINT_PASSWORD,
+                       domain=SP_HOME_URL):
 
     """
     This function authenticates a SharePoint session and returns a
@@ -57,15 +67,15 @@ def sharepoint_session(sharepoint_user=sharepoint_username,
 
     session = requests.Session()
     authenticate = session.post(domain,
-                             auth=HttpNtlmAuth(sharepoint_user,
-                                               sharepoint_password))
+                                auth=HttpNtlmAuth(sharepoint_user,
+                                                  sharepoint_pw))
     HTTP_response_code = authenticate.status_code
     if connection_success(HTTP_response_code):
         print "SharePoint connection successful."
         return session
 
 
-def crawl_home_page(active_session, host_link=instance, link_path=homepage):
+def crawl_home_page(active_session, host_link=SHAREPOINT_HOSTNAME, link_path=SP_HOST_HOMEPAGE):
 
     """
     This function returns a dictionary of {descendant pages: page link} which
@@ -112,7 +122,7 @@ def get_page_HTML(active_session, page_link):
     page_object = active_session.post(page_link)
     if connection_success(page_object.status_code):
         page_html = page_object.content[(page_object.text.find(content_start)
-                                       + len(content_start)):page_object.text.find(content_end)]
+                                         + len(content_start)):page_object.text.find(content_end)]
         return page_html
 
 
@@ -130,16 +140,20 @@ def get_page_resources(page_html):
 
 
 def return_web_links(page_soup):
+
     """
     Returns a list of valid web links found on a page.
     """
+
     web_links = []
+
     try:
         for line in page_soup:
             if line.startswith('/sites/wikis/fixwiki/Pages/'):
                 if line.endswith('.aspx'):
                     web_links.append(line)
         return web_links
+
     except:
         return False
 
@@ -147,7 +161,7 @@ def return_web_links(page_soup):
 # MESSY, BUT THIS CRAWLS ALL PAGES
 counter = 1
 testsesh = sharepoint_session()
-starting = get_page_resources(get_page_HTML(testsesh, page_link=this_domain))
+starting = get_page_resources(get_page_HTML(testsesh, page_link=SP_HOME_URL))
 pages_to_go = []
 
 p = return_web_links(starting)
@@ -155,7 +169,7 @@ for a in p:
     if a not in pages_to_go:
         pages_to_go.append(a)
 for i in pages_to_go:
-    link = instance + i
+    link = SHAREPOINT_HOSTNAME + i
     try:
         ht = get_page_HTML(testsesh, link)
     except:
@@ -172,16 +186,7 @@ for i in pages_to_go:
 print "Total pages crawled: ", counter
 print "Total valid web pages found: ", len(pages_to_go)
 
-
-
-
-
-
-
-
-
-
-
+######################################################################
 
 def create_page_file():
     """This function creates a file folder based on the name of a page.
@@ -195,7 +200,8 @@ def create_page_file():
     pass
 
 def save_to_file():
-    """This function saves files to disk.  The target save location,
+    """
+    This function saves files to disk.  The target save location,
     web file location, and file name are provided as parameters.
 
     Name validation is performed before saving."""
