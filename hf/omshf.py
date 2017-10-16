@@ -1,8 +1,21 @@
 from jira import JIRA
 from flask import Flask, render_template
 import termcolor
-# import webbrowser
+import webbrowser
 import secrets
+
+# class Printer(object):
+#
+#     def printError(self, data):
+#
+#         color = 'red'
+#         attributes = ['bold']
+#         print termcolor.colored(data, color=color, attrs=attributes)
+#
+#     def printSuccess(self, data):
+#         color = 'green'
+#         attributes = ['bold']
+#         print termcolor.colored(data, color=color, attrs=attributes)
 
 class jiraSession(object):
 
@@ -11,15 +24,24 @@ class jiraSession(object):
     options = {'server': 'https://jira.ezesoft.net'}
     session = None
     hfJiraID = None
-    approver = None
     hotfix = None
     mainline = None
 
-    def __init__(self, hfJiraID, approver):
+    def __init__(self, hfJiraID):
 
         self.hfJiraID = hfJiraID
-        self.approver = approver
         self.connectToJira()
+
+    def printError(self, data):
+
+        color = 'red'
+        attributes = ['bold']
+        print termcolor.colored(data, color=color, attrs=attributes)
+
+    def printSuccess(self, data):
+        color = 'green'
+        attributes = ['bold']
+        print termcolor.colored(data, color=color, attrs=attributes)
 
     def makeIssue(self):
 
@@ -27,7 +49,12 @@ class jiraSession(object):
 
     def connectToJira(self):
 
-        self.session = JIRA(basic_auth=(self.user, self.pw), options=self.options)
+        try:
+            self.session = JIRA(basic_auth=(self.user, self.pw), options=self.options)
+            self.printSuccess('JIRA connection successful.')
+        except Exception, e:
+            self.printError('JIRA connection failed: %s' % e)
+            raise StandardError
 
     def setHotfix(self, jiraIssue):
 
@@ -55,13 +82,22 @@ class jiraSession(object):
         else:
             return "This issue will be resolved in the head version (%s) in " % self.mainline.fixVersion
 
-    def getApprover(self):
+    def createEmailSubject(self):
 
-        return self.approver
+        summary = self.hotfix.summary
+        if summary[0:2] == 'SR':
+            firstHyphen = summary.find("-") + 2
+            if firstHyphen:
+                return summary[firstHyphen:]
+        else:
+            return summary
 
     def generateAnnouncement(self):
 
-        announcementContent = {'approvalInfo': "Hotfix approved by %s. %s." % (self.getApprover(), self.hotfix.summary),
+        announcementContent = {'emailSubject': 'HOTFIX ANNOUNCEMENT: %s' % self.createEmailSubject(),
+                               'approvalInfo': "Hotfix approved by %s. %s." %
+                                               (self.hotfix.approver,
+                                                self.hotfix.summary),
                                'mainlineInfo': self.getMLCaseStatus(),
                                'mainlineLink': self.mainline.sourceLink,
                                'mainlineID' : self.mainline.sourceID,
@@ -92,6 +128,18 @@ class jiraIssue(object):
     clientLink = None
     status = None
     mainlineIssue = None
+    approver = None
+
+    def printError(self, data):
+
+        color = 'red'
+        print termcolor.colored(data, color=color)
+
+    def printSuccess(self, data):
+
+        color = 'green'
+        attributes = ['bold']
+        print termcolor.colored(data, color=color, attrs=attributes)
 
     def populateBasic(self, jiraSession, jiraIssue):
 
@@ -109,6 +157,7 @@ class jiraIssue(object):
         self.setCategory()
         self.setClientNameAndLink()
         self.findMLCase(jiraSession)
+        self.setApprover(jiraSession)
 
     def formatDate(self):
 
@@ -127,7 +176,7 @@ class jiraIssue(object):
         try:
             caseNum = self.jiraObject.raw['fields']['customfield_11561']
         except Exception, e:
-            print "Salesforce case number not found: %s" % e
+            self.printError("Salesforce case number not found: %s" % e)
             caseNum = "-"
         return caseNum
 
@@ -136,7 +185,7 @@ class jiraIssue(object):
         try:
             caseLink = self.formatSFLink(self.jiraObject.raw['fields']['customfield_12863'][0])
         except Exception, e:
-            print "Salesforce case link not found: %s" % e
+            self.printError("Salesforce case link not found: %s" % e)
             caseLink = None
         return caseLink
 
@@ -150,7 +199,7 @@ class jiraIssue(object):
         try:
             clientName = self.jiraObject.raw['fields']['customfield_12969']
         except Exception, e:
-            print "Client name not found: %s" % e
+            self.printError("Client name not found: %s" % e)
             clientName = 'None'
         return clientName
 
@@ -159,7 +208,7 @@ class jiraIssue(object):
         try:
             clientLink = self.formatSFLink(self.jiraObject.raw['fields']['customfield_12861'][0])
         except Exception, e:
-            print "Client link not found: %s" % e
+            self.printError("Client link not found: %s" % e)
             clientLink = None
         return clientLink
 
@@ -177,14 +226,14 @@ class jiraIssue(object):
         try:
             category = self.jiraObject.raw['fields']['customfield_12860']['value']
         except Exception, e:
-            print "Category not found: %s" % e
+            self.printError("Category not found: %s" % e)
             category = None
 
         if category:
             try:
                 subcategory = self.jiraObject.raw['fields']['customfield_12860']['child']['value']
             except Exception, e:
-                print "Subcategory not found: %s" % e
+                self.printError("Subcategory not found: %s" % e)
                 subcategory = None
 
         if category:
@@ -200,9 +249,13 @@ class jiraIssue(object):
             try:
                 key = issue['inwardIssue']['key']
             except Exception, e:
-                print "Inward issue link not found: %s" % e
-                print "Locating outward issues..."
+                self.printError("Inward issue link not found: %s" % e)
+                self.printError("Locating outward issues...")
                 key = issue['outwardIssue']['key']
+                if key:
+                    self.printSuccess('Mainline issue located.')
+                else:
+                    self.printError('Mainline issue not found.')
             jiraIssue = jiraSession.session.issue(key)
             issueSummary = jiraIssue.fields.summary
             if issueSummary[0:4] == 'MAIN':
@@ -210,18 +263,39 @@ class jiraIssue(object):
                     self.mainlineIssue = key
         return
 
+    def getJiraProjectKey(self):
+
+        return self.jiraObject.raw['fields']['project']['key']
+
+    def getProjectLead(self, jiraSession):
+
+        projectName = self.getJiraProjectKey()
+        projectObject = jiraSession.session.project(projectName)
+        return projectObject.lead.displayName
+
+    def getJiraApproverName(self, jiraSession):
+
+        approverFullName = [str(word) for word in self.getProjectLead(jiraSession).split(" ")]
+        approverLastName = approverFullName[-1]
+        return approverLastName
+
+    def setApprover(self, jiraSession):
+
+        self.approver = self.getJiraApproverName(jiraSession)
 
 hfJiraID = raw_input("Hotfix JIRA ID: ")
-approverName = raw_input("Approver's last name: ")
-
 app = Flask(__name__)
+# log = logging.getLogger('werkzeug')
+# log.setLevel(logging.FATAL)
 @app.route('/')
-def go(hfJiraID=hfJiraID, approverName=approverName):
-    session = jiraSession(hfJiraID, approverName)
+def go(hfJiraID=hfJiraID):
+    session = jiraSession(hfJiraID)
     session.generateContent()
     content = session.generateAnnouncement()
-    # webbrowser.open("http://localhost:5000/", new=1, autoraise=True)
     return render_template('index.html',**content)
-
+webbrowser.open("localhost:5000/", new=1, autoraise=True)
 if __name__ == "__main__":
     app.run()
+
+# TODO: Disposition to clipboard
+# TODO: Test cases
