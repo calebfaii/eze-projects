@@ -1,7 +1,9 @@
-from jira import JIRA
 import json
 import urllib
-import secrets
+
+from jira import JIRA
+
+from hf import secrets
 
 link = secrets.website
 username = secrets.username
