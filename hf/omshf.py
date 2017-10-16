@@ -1,15 +1,7 @@
-"""
-This module accomplishes the following:
-
-    1. Make a call to JIRA API using specified JIRA ticket
-    2. Extract key fields from this ticket
-    3. Make another call to the JIRA API to obtain the ML merge FV
-    4. Generate the HF announcement
-"""
-
 from jira import JIRA
 from flask import Flask, render_template
-import webbrowser
+import termcolor
+# import webbrowser
 import secrets
 
 class jiraSession(object):
@@ -85,7 +77,6 @@ class jiraSession(object):
 
         return announcementContent
 
-
 class jiraIssue(object):
 
     jiraObject = None
@@ -135,7 +126,8 @@ class jiraIssue(object):
 
         try:
             caseNum = self.jiraObject.raw['fields']['customfield_11561']
-        except Exception:
+        except Exception, e:
+            print "Salesforce case number not found: %s" % e
             caseNum = "-"
         return caseNum
 
@@ -143,7 +135,8 @@ class jiraIssue(object):
 
         try:
             caseLink = self.formatSFLink(self.jiraObject.raw['fields']['customfield_12863'][0])
-        except Exception:
+        except Exception, e:
+            print "Salesforce case link not found: %s" % e
             caseLink = None
         return caseLink
 
@@ -156,7 +149,8 @@ class jiraIssue(object):
 
         try:
             clientName = self.jiraObject.raw['fields']['customfield_12969']
-        except Exception:
+        except Exception, e:
+            print "Client name not found: %s" % e
             clientName = 'None'
         return clientName
 
@@ -164,7 +158,8 @@ class jiraIssue(object):
 
         try:
             clientLink = self.formatSFLink(self.jiraObject.raw['fields']['customfield_12861'][0])
-        except Exception:
+        except Exception, e:
+            print "Client link not found: %s" % e
             clientLink = None
         return clientLink
 
@@ -173,19 +168,23 @@ class jiraIssue(object):
         self.client = self.getClientName()
         self.clientLink = self.getClientLink()
 
-    def setCategory(self): # TODO: fix
+    def setCategory(self):
+
+        # TODO: investigate this method with some more use cases.
 
         subcategory = None
 
         try:
             category = self.jiraObject.raw['fields']['customfield_12860']['value']
-        except Exception:
+        except Exception, e:
+            print "Category not found: %s" % e
             category = None
 
         if category:
             try:
                 subcategory = self.jiraObject.raw['fields']['customfield_12860']['child']['value']
-            except Exception:
+            except Exception, e:
+                print "Subcategory not found: %s" % e
                 subcategory = None
 
         if category:
@@ -200,7 +199,9 @@ class jiraIssue(object):
         for issue in issueLinks:
             try:
                 key = issue['inwardIssue']['key']
-            except Exception:
+            except Exception, e:
+                print "Inward issue link not found: %s" % e
+                print "Locating outward issues..."
                 key = issue['outwardIssue']['key']
             jiraIssue = jiraSession.session.issue(key)
             issueSummary = jiraIssue.fields.summary
@@ -209,12 +210,14 @@ class jiraIssue(object):
                     self.mainlineIssue = key
         return
 
-hfjira = raw_input("Hotfix JIRA ID: ")
-ap = raw_input("Approver's last name: ")
+
+hfJiraID = raw_input("Hotfix JIRA ID: ")
+approverName = raw_input("Approver's last name: ")
+
 app = Flask(__name__)
 @app.route('/')
-def go(hfjira=hfjira, ap=ap):
-    session = jiraSession(hfjira, ap)
+def go(hfJiraID=hfJiraID, approverName=approverName):
+    session = jiraSession(hfJiraID, approverName)
     session.generateContent()
     content = session.generateAnnouncement()
     # webbrowser.open("http://localhost:5000/", new=1, autoraise=True)
